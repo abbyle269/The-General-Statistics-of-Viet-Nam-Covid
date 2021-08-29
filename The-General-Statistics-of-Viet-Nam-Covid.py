@@ -8,16 +8,17 @@ Original file is located at
 """
 # import library
 import requests
+import calendar
 import pandas as pd
-from datetime import date, datetime, timedelta
 from bs4 import BeautifulSoup
+from datetime import date, datetime, timedelta
 
 # crawl information from wikipedia website
 # ping a website and return the HTML 
 website_url = requests.get('https://en.m.wikipedia.org/wiki/COVID-19_pandemic_in_Vietnam').text
 soup = BeautifulSoup(website_url,'lxml')
 
-# accessing HTML tags to locate the information table 
+# accessing HTML tags to locate the table - Timeline
 table = soup.find('div',{'class':'barbox tright'})
 rows = table.findAll('tr',{'class':'mw-collapsible mw-collapsed'})
 
@@ -28,7 +29,7 @@ for i in rows:
   cases = int(i.find('span',{'class':"mcc-rm"}).string.replace(',',''))
   deaths = int(i.find('span',{'class':"mcc-rt"}).string.replace(',',''))
 
-# Append data with full informatin on a dataframe
+# temporary remove rows with unclear information and append it to a dataframe
   if dates!="⋮":
     tmp_row = {
     "date" : dates,
@@ -38,13 +39,14 @@ for i in rows:
     a.append(tmp_row)
 df = pd.DataFrame(a)
 
-# Convert string date to datetime type
+# convert date dataframe with string type to datetime type
 df["date"] = pd.to_datetime(df["date"])
 
-# create date dataframe with full days
+# create date dataframe and fill unknown dates. 
+# determine all dates based on the beginning day and ending day
 date_df = pd.DataFrame({"date" : pd.date_range(start=df["date"].min(), end=df["date"].max())})
 
-#Merge 2 dataframes 
+# merge 2 dataframes 
 final = pd.merge(
     date_df,
     df,
@@ -52,14 +54,15 @@ final = pd.merge(
     left_on="date",
     right_on="date",
 )
-# Sorted dates
+
+# sorted dates
 final.sort_values("date")
 
-# Fill NaN
+# fill NaN values
 final = final.fillna(method='ffill')
 final
 
-# Calculate percentages of case rates 
+# calculate percentages of case rates 
 case_rates_percent = 0
 case_rates_list = [0]
 final["case rate"] = case_rates_percent
@@ -68,7 +71,7 @@ for current_number,previous_number in zip(final['case'],final['case'][1:]):
   case_rates_list.append(case_rates_percent)
 final["case rate"] = case_rates_list
 
-# Calculate percentages of death rates
+# calculate percentages of death rates
 death_rates_percent = 0
 death_rates_list = [0]
 final["death rate"] = death_rates_percent
@@ -77,24 +80,32 @@ for current_number_d,previous_number_d in zip(final["death"],final["death"][1:])
   death_rates_list.append(death_rates_percent)
 final["death rate"] = death_rates_list
 
+# review dataframe information such as datatypes and its index
 final.info()
 
-import calendar
 week = []
 month = []
-for n in final['date']:
-  week.append(n.strftime('%A'))
-  month.append(n.strftime('%m'))
+#  convert date and time objects to their string representation: weeks and months
+for date in final['date']:
+  week.append(date.strftime('%A'))
+  month.append(date.strftime('%m'))
 final["week"] = week
 final["month"] = month
-days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday', 'Sunday']
-# index theo thứ tự tuần
-week_df = final.groupby('week').sum().reindex(days)
-print(week_df)
+
+# define a list with 7 days of week
+days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+# define a list with 12 months 
 months = ['01','02','03','04','05','06','07','08','09','10','11','12']
+
+# indexing and grouping based on days of week's and months' order as 2 dataframes
+week_df = final.groupby('week').sum().reindex(days)
 month_df = final.groupby('month').sum().reindex(months)
+print(week_df)
 print(month_df)
 
+# plot 2 dataframes by weeks and months
 y =["case rate", "death rate"] 
 week_df.plot(y=y)
 month_df.plot(y=y)
+
+
